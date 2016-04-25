@@ -1,0 +1,240 @@
+---
+title: "Weight Lifting Excercise Analaysis with Machine Learning"
+output: html_document
+---
+
+##Executive Summary:
+
+The purpose of this analysis is to examine the data collected by body sensors while participants performed weight lifting excercises with a dumbell, and use machine learing to predict whether or not the excercise was performed correctly.
+
+Participants wore sensors on the arm, belt, forearm and dumbell and were asked to perform the exercises in five different ways. The readings were captured and a '_classe_' variable assigned to each reading. The 5 different classifications were:
+
+  *  __A__ - Performing the excersise correctly
+  *  __B__ - Throwing the elbows to the front 
+  *  __C__ - Lifting the dumbbell only halfway
+  *  __D__ - Lowering the dumbbell only halfway
+  *  __E__ - Throwing the hips to the front 
+
+Details of the study can be found here: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har)
+
+The training and testing datasets can be found here:
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) ,
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+After running and testing several machine learning algorithms on the data, it was found that the results could be predicted with __99%__ accuracy using only a random forest models, using all relevant predictors in the dataset that did not contain missing values.
+
+
+##Method:
+
+1) Split the training data into a test and validation set.
+2) Since we are performimg a classification assignment, the relevant algoriths from the caret package in R were used to create models on the training data. 
+3) Compare the accuracy of each model.
+4) Use the best model to predict the 20 test cases from the [pml-testing](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) and report on results
+
+##Analysis:
+
+``` {r, echo=TRUE}
+# load required libraries
+suppressWarnings(suppressMessages(library(caret)))
+suppressWarnings(suppressMessages(library(randomForest)))
+suppressWarnings(suppressMessages(library(gbm)))
+suppressWarnings(suppressMessages(library(rattle)))
+suppressWarnings(suppressMessages(library(rpart)))
+suppressWarnings(suppressMessages(library(MASS)))
+suppressWarnings(suppressMessages(library(plyr)))
+suppressWarnings(suppressMessages(library(kernlab)))
+
+```
+
+First, let's load the training data into R and have a look at it.
+``` {r, echo=TRUE}
+#set na.strings to ensure that all missing values are coded as NA
+train <- read.csv("pml-training.csv", header=TRUE, na.strings=c("", " ", NA))
+#View(train)
+
+```
+
+We can see that the first seven columns __("","user_name","raw_timestamp_part_1","raw_timestamp_part_2"	  ,"cvtd_timestamp","new_window","num_window")__ are not related to prediction - the timestamp would be necessary if we were doing a timeseries analysis, but since each observation has a '_classe_' assigned to it we will not have to do this.
+
+``` {r, echo=TRUE}
+#drop the first 7 columns not related to prediction
+train2 <- train[,-(1:7)]
+#View(train2)
+```
+
+A large number of the columns contain missing data. For the purposes of creating a predictive model, we will leave these out.
+
+``` {r, echo=TRUE}
+#drop columns with NA values
+train3 <- train2[,colSums(is.na(train2)) == 0] 
+```
+
+We are now left with 52 predictors and the outcome variable - _classe_. We will split the data into training and testing sets for validation.
+
+``` {r, echo=TRUE}
+## split the dataset into training and testing
+inTrain = createDataPartition(train3$classe, p = 3/4)[[1]]
+
+training = train3[ inTrain,]
+testing = train3[-inTrain,]
+```
+
+Since the trainging set has over 14K observations, in order to save processing time, lets take a smaller sample with which to evaulate the various models.
+
+``` {r, echo=TRUE}
+train_sample <- training[sample(nrow(training), 1000), ]
+```
+
+
+
+We will now use the 'train_sample' and 'testing' datasets to create and measure the accuracy of the following machine learing algorithms:
+
+  1) __Random Forest__ - "rf"
+  2) __Linear Disciminant Analysis__ - "lda"
+  3) __Boosting__ - "gbm"
+  4) __Decision Tree__ - "rpart"
+  5) __Support Vector Machine__ - "svmRadial"
+
+
+```{r, echo=TRUE, cache=TRUE}
+set.seed(62433)
+## RANDOM FOREST
+mdl_rf <- train(classe ~ ., data=train_sample, method="rf")
+pred_rf = predict(mdl_rf, newdata=testing)
+
+c_rf <- confusionMatrix(pred_rf,testing$classe)
+c_rf$overall[1] 
+## Accuracy 
+## 0.9006933 
+
+## LDA
+mdl_lda <- train(classe ~ ., method="lda",data=train_sample)
+pred_lda = predict(mdl_lda, newdata=testing)
+
+c_lda <- confusionMatrix(pred_lda,testing$classe)
+c_lda$overall[1] 
+##  Accuracy 
+## 0.6823002
+
+## BOOST
+mdl_boost <- train(classe ~ ., method="gbm",data=train_sample, verbose=FALSE)
+pred_boost = predict(mdl_boost, newdata=testing)
+
+c_boost <- confusionMatrix(pred_boost,testing$classe)
+c_boost$overall[1] 
+## Accuracy 
+## 0.8902936 
+
+## DECISION TREE
+mdl_rpart <- train(classe ~ ., method="rpart",data=train_sample)
+pred_rpart = predict(mdl_rpart, newdata=testing)
+
+c_rpart <- confusionMatrix(pred_rpart,testing$classe)
+c_rpart$overall[1] 
+## Accuracy 
+## 0.5004078  
+
+# SVM
+mdl_svm <- suppressWarnings(train(classe ~ ., method="svmRadial",data=train_sample, verbose=FALSE))
+
+pred_svm = predict(mdl_svm, newdata=testing)
+
+c_svm <- confusionMatrix(pred_svm,testing$classe)
+c_svm$overall[1]
+## Accuracy 
+## 0.7181892
+```
+
+
+Since the model with the highest accuracy was random forest, let's create a new model using the full training dataset.
+
+``` {r, echo=TRUE}
+## RANDOM FOREST (On full training set)
+mdl_rf <- train(classe ~ ., data=training, method="rf")
+pred_rf = predict(mdl_rf, newdata=testing)
+
+c_rf <- confusionMatrix(pred_rf,testing$classe)
+c_rf$overall[1] 
+
+## Accuracy 
+## 0.9938825 
+```
+
+The accuracy of prediction on the testing set is now 99%. However, running the full random forest using all of the observations and all of the predictors takes a great deal of time.
+
+Let's see what the most important predictors and then run a model with these.
+
+```{r, echo=TRUE}
+varImp(mdl_rf)
+
+## only 20 most important variables shown (out of 52)
+
+## Overall
+## roll_belt          100.00
+## yaw_belt            77.01
+## magnet_dumbbell_z   67.59
+## magnet_dumbbell_y   64.34
+## pitch_belt          61.01
+## pitch_forearm       55.95
+## magnet_dumbbell_x   50.57
+## roll_forearm        49.83
+## magnet_belt_z       44.42
+## accel_belt_z        43.53
+## accel_dumbbell_y    43.39
+## magnet_belt_y       41.66
+## roll_dumbbell       40.16
+## accel_dumbbell_z    37.64
+## roll_arm            34.98
+## accel_forearm_x     32.36
+## gyros_belt_z        29.46
+## accel_dumbbell_x    29.20
+## yaw_dumbbell        28.57
+## magnet_arm_x        28.55
+
+#take only varsiables over 50
+v <- c("roll_belt","yaw_belt","magnet_dumbbell_z", "magnet_dumbbell_y","pitch_belt", "pitch_forearm", "magnet_dumbbell_x", "classe")
+
+train4 <- training[,v]
+
+mdl_rf4 <- train(classe ~ ., data=train4, method="rf")
+pred_rf4 = predict(mdl_rf4, newdata=testing)
+
+c_rf4 <- confusionMatrix(pred_rf4,testing$classe)
+c_rf4$overall[1]
+
+## Accuracy 
+## 0.9818515 
+
+```
+The accuracy on the testing set drops to 98%, but the model runs much more quickly!
+
+
+Now let's take the quiz. We will import the 20 test observations and perform the same modifications as we did the the training set.
+
+```{r, echo=TRUE}
+test <- read.csv("pml-testing.csv", header=TRUE, na.strings=c("", " ",NA))
+#remove first seven columns
+test2 <- test[,-(1:7)]
+#remove columns with NA
+test3 <- test2[,colSums(is.na(train2)) == 0]
+
+#use our random forest model to make predictions
+pred_rf = predict(mdl_rf, newdata=test3)
+
+#check the accuracy
+c_rf <- confusionMatrix(pred_rf,testing$classe)
+c_rf$overall[1] 
+
+#create a dataframe to output and use to fill out the course Quiz
+df <- data.frame(test3,pred_rf)
+View(df)
+```
+
+A final result of 100% was obtained on the Quiz.
+
+##Conclusion
+
+It was found that a prediction accuracy of 98% can be obtained using a Random Forest and 52 predictors from the Weight Lifting Excercise dataset.
+
+
