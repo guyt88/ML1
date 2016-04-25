@@ -1,6 +1,6 @@
 ---
 title: "Weight Lifting Excercise Analaysis with Machine Learning"
-output: html_document
+output: word_document
 ---
 
 ##Executive Summary:
@@ -223,12 +223,12 @@ test3 <- test2[,colSums(is.na(train2)) == 0]
 pred_rf = predict(mdl_rf, newdata=test3)
 
 #check the accuracy
-c_rf <- confusionMatrix(pred_rf,testing$classe)
+c_rf <- confusionMatrix(pred_rf,test3$classe)
 c_rf$overall[1] 
 
 #create a dataframe to output and use to fill out the course Quiz
 df <- data.frame(test3,pred_rf)
-View(df)
+#View(df)
 ```
 
 A final result of 100% was obtained on the Quiz.
